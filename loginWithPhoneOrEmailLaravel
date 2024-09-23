@@ -1,0 +1,101 @@
+namespace App\Http\Controllers\Auth;
+
+use App\Http\Controllers\Controller;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\ValidationException;
+use App\Models\User;
+use Illuminate\Support\Facades\Hash;
+
+class LoginController extends Controller
+{
+    public function login(Request $request)
+    {
+        // Validate the input fields
+        $request->validate([
+            'email_or_phone' => 'required|string',
+            'password' => 'required|string',
+        ]);
+
+        // Find user by email or phone
+        $user = User::where('email', $request->email_or_phone)
+                    ->orWhere('phone', $request->email_or_phone)
+                    ->first();
+
+        // If user does not exist, return error
+        if (!$user) {
+            throw ValidationException::withMessages([
+                'email_or_phone' => ['These credentials do not match our records.'],
+            ]);
+        }
+
+        // Prepare credentials array
+        $credentials = [
+            'password' => $request->password,
+        ];
+
+        // Use the found user's identifier to prepare the login attempt
+        if ($user->email === $request->email_or_phone) {
+            $credentials['email'] = $request->email_or_phone;
+        } else {
+            $credentials['phone'] = $request->email_or_phone;
+        }
+
+        // Attempt to log in
+        if (Auth::attempt($credentials)) {
+            // Authentication passed
+            return response()->json(['message' => 'Login successful']);
+        }
+
+        // If login attempt fails, return error
+        throw ValidationException::withMessages([
+            'password' => ['The provided password is incorrect.'],
+        ]);
+    }
+}
+
+
+
+
+
+
+<form id="loginForm">
+    @csrf  <!-- CSRF protection -->
+
+    <label for="email_or_phone">Email or Phone:</label>
+    <input type="text" name="email_or_phone" id="email_or_phone" required>
+
+    <label for="password">Password:</label>
+    <input type="password" name="password" id="password" required>
+
+    <label for="new_password">New Password (optional):</label>
+    <input type="password" name="new_password" id="new_password">
+
+    <button type="submit">Login</button>
+</form>
+
+<!-- jQuery for AJAX call -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script>
+    $('#loginForm').submit(function(e) {
+        e.preventDefault();
+
+        $.ajax({
+            url: '{{ route("login") }}',
+            type: 'POST',
+            data: {
+                _token: '{{ csrf_token() }}',
+                email_or_phone: $('#email_or_phone').val(),
+                password: $('#password').val(),
+                new_password: $('#new_password').val() // Include new_password if needed
+            },
+            success: function(response) {
+                alert('Login Successful!');
+                // Redirect or perform another action
+            },
+            error: function(response) {
+                alert('Login Failed. Please check your credentials.');
+            }
+        });
+    });
+</script>

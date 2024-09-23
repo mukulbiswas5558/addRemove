@@ -1,0 +1,36 @@
+const getPosts = async (req, res) => {
+  try {
+    const { search } = req.query;
+
+    // Define a regex for searching (case-insensitive)
+    const searchRegex = new RegExp(search, 'i');
+
+    // Find posts and populate related models
+    const posts = await Post.find({
+      $or: [
+        { title: { $regex: searchRegex } },  // Search in 'title'
+        { body: { $regex: searchRegex } },  // Search in 'body'
+        { 'user.name': { $regex: searchRegex } },  // Search in 'user.name'
+        { 'category.name': { $regex: searchRegex } },  // Search in 'category.name'
+        { 'comments.comment': { $regex: searchRegex } },  // Search in 'comments.comment'
+        { 'comments.user.name': { $regex: searchRegex } }  // Search in 'comments.user.name'
+      ]
+    })
+    .populate('user', 'name')  // Select only 'name' field from the 'user'
+    .populate({
+      path: 'comments',
+      populate: {
+        path: 'user',
+        select: 'name'  // Select 'name' field from 'comments.user'
+      }
+    })
+    .populate('category', 'name')  // Select 'name' field from 'category'
+    .select('id title body category user')  // Select specific fields from 'Post'
+    .limit(10);  // Paginate, limit to 10 posts per request
+
+    res.status(200).json(posts);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+};

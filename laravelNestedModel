@@ -1,0 +1,25 @@
+$posts = Post::with([
+    'user:id,name',  // Select only 'id' and 'name' from the 'user' model
+    'comments.user:id,name',  // Select only 'id' and 'name' from 'comments.user'
+    'category:id,name'  // Select only 'id' and 'name' from the 'category' model
+])
+->where(function ($query) use ($search) {
+    $query->where('title', 'LIKE', "%{$search}%")
+          ->orWhere('body', 'LIKE', "%{$search}%");  // Search in 'title' and 'body'
+})
+->orWhereHas('user', function ($query) use ($search) {
+    $query->where('name', 'LIKE', "%{$search}%");  // Search in 'user.name'
+})
+->orWhereHas('category', function ($query) use ($search) {
+    $query->where('name', 'LIKE', "%{$search}%");  // Search in 'category.name'
+})
+->orWhereHas('comments', function ($query) use ($search) {
+    $query->where('comment', 'LIKE', "%{$search}%")  // Search in 'comments.comment'
+          ->orWhereHas('user', function ($query) use ($search) {
+              $query->where('name', 'LIKE', "%{$search}%");  // Search in 'comments.user.name'
+          });
+})
+->select('id', 'title', 'body', 'category_id', 'user_id')  // Select specific columns from 'posts'
+->paginate(10);  // 10 posts per page
+
+return response()->json($posts);

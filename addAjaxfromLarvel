@@ -1,0 +1,94 @@
+<form id="userForm" enctype="multipart/form-data">
+    @csrf  <!-- Important for CSRF protection -->
+    
+    <label for="name">Name:</label>
+    <input type="text" name="name" id="name">
+    
+    <label for="gender">Gender:</label>
+    <select name="gender" id="gender">
+        <option value="male">Male</option>
+        <option value="female">Female</option>
+    </select>
+    
+    <label for="email">Email:</label>
+    <input type="email" name="email" id="email">
+    
+    <label for="phone">Phone:</label>
+    <input type="text" name="phone" id="phone">
+    
+    <label for="profile_image">Profile Image:</label>
+    <input type="file" name="profile_image" id="profile_image">
+    
+    <button type="submit">Submit</button>
+</form>
+
+<!-- jQuery for AJAX call -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script>
+    $('#userForm').submit(function(e) {
+        e.preventDefault();
+
+        var formData = new FormData(this); // Create FormData object
+
+        $.ajax({
+            url: '{{ route("user.store") }}',  // Route to store data
+            type: 'POST',
+            data: formData,
+            contentType: false,  // Required for file upload
+            processData: false,  // Prevent jQuery from processing the data
+            headers: {
+                'X-CSRF-TOKEN': $('input[name=_token]').val()  // Pass CSRF token
+            },
+            success: function(response) {
+                alert("Form Submitted Successfully");
+                console.log(response);
+            },
+            error: function(response) {
+                console.error("Error occurred:", response);
+            }
+        });
+    });
+</script>
+
+
+
+
+
+namespace App\Http\Controllers;
+
+use Illuminate\Http\Request;
+use App\Models\User;
+
+class UserController extends Controller
+{
+    public function store(Request $request)
+    {
+        // Validate the form data
+        $validatedData = $request->validate([
+            'name' => 'required|string|max:255',
+            'gender' => 'required|string',
+            'email' => 'required|email|unique:users,email',
+            'phone' => 'required|digits:10|unique:users,phone',
+            'profile_image' => 'required|image|mimes:jpeg,png,jpg,gif|max:2048'
+        ]);
+
+        // Handle the file upload
+        if ($request->hasFile('profile_image')) {
+            $imageName = time().'.'.$request->profile_image->extension();
+            $request->profile_image->move(public_path('uploads'), $imageName);
+        } else {
+            $imageName = null;
+        }
+
+        // Store the data in the database
+        $user = new User;
+        $user->name = $request->name;
+        $user->gender = $request->gender;
+        $user->email = $request->email;
+        $user->phone = $request->phone;
+        $user->profile_image = $imageName; // Save image path
+        $user->save();
+
+        return response()->json(['success' => 'User created successfully!']);
+    }
+}

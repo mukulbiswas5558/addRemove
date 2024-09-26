@@ -180,6 +180,76 @@ class Database {
         return $this->conn;
     }
 }
+
+
+<?php
+
+function sanitize($data) {
+    return htmlspecialchars(strip_tags($data));
+}
+
+function formatDate($date) {
+    return date("d-M-Y", strtotime($date));
+}
+
+function redirect($url) {
+    header("Location: $url");
+    exit;
+}
+
+function debug($data) {
+    echo '<pre>';
+    print_r($data);
+    echo '</pre>';
+}
+
+
+
+
+
+<?php
+
+require_once '../models/Product.php';
+require_once '../config/constants.php';
+require_once '../helpers/helpers.php';
+
+class ProductController {
+    private $product;
+
+    public function __construct() {
+        $this->product = new Product();
+    }
+
+    // Create a new product
+    public function create($name, $price) {
+        $this->product->name = sanitize($name);
+        $this->product->price = sanitize($price);
+
+        if ($this->product->create()) {
+            echo "Product created successfully!";
+        } else {
+            echo "Unable to create product.";
+        }
+    }
+
+    // Read all products with pagination
+    public function readAll($page, $recordsPerPage) {
+        $fromRecordNum = ($page - 1) * $recordsPerPage;
+
+        $stmt = $this->product->readAll($fromRecordNum, $recordsPerPage);
+        $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $totalRows = $this->product->countAll();
+        $totalPages = ceil($totalRows / $recordsPerPage);
+
+        return [
+            'products' => $products,
+            'total_pages' => $totalPages,
+            'current_page' => $page,
+        ];
+    }
+}
+
 /project-root
     /controllers
         ProductController.php

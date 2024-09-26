@@ -1,0 +1,193 @@
+<?php
+
+require_once '../controllers/ProductController.php';
+
+$productController = new ProductController();
+
+// Handle creating new product
+if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    $name = $_POST['name'];
+    $price = $_POST['price'];
+    $productController->create($name, $price);
+}
+
+// Handle reading products with pagination
+$page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+$recordsPerPage = 5;
+$data = $productController->readAll($page, $recordsPerPage);
+
+$products = $data['products'];
+$totalPages = $data['total_pages'];
+$current_page = $data['current_page'];
+
+?>
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Product Management</title>
+</head>
+<body>
+    <h1>Products</h1>
+    
+    <!-- Create Product Form -->
+    <form action="index.php" method="POST">
+        <input type="text" name="name" placeholder="Product Name" required>
+        <input type="number" name="price" placeholder="Price" required>
+        <button type="submit">Create Product</button>
+    </form>
+
+    <h2>Product List</h2>
+    
+    <ul>
+        <?php foreach ($products as $product): ?>
+            <li>
+                <?php echo $product['name']; ?> - $<?php echo $product['price']; ?>
+            </li>
+        <?php endforeach; ?>
+    </ul>
+
+    <!-- Pagination Links -->
+    <div>
+        <?php for ($i = 1; $i <= $totalPages; $i++): ?>
+            <a href="?page=<?php echo $i; ?>" <?php echo $i == $current_page ? 'style="font-weight: bold;"' : ''; ?>>
+                <?php echo $i; ?>
+            </a>
+        <?php endfor; ?>
+    </div>
+
+</body>
+</html>
+
+
+
+<?php
+
+require_once '../models/Product.php';
+require_once '../config/database.php';
+
+class ProductController {
+    private $db;
+    private $product;
+
+    public function __construct() {
+        $database = new Database();
+        $this->db = $database->getConnection();
+        $this->product = new Product($this->db);
+    }
+
+    // Create a new product
+    public function create($name, $price) {
+        $this->product->name = $name;
+        $this->product->price = $price;
+
+        if ($this->product->create()) {
+            echo "Product created successfully!";
+        } else {
+            echo "Unable to create product.";
+        }
+    }
+
+    // Read all products with pagination
+    public function readAll($page, $recordsPerPage) {
+        $fromRecordNum = ($page - 1) * $recordsPerPage;
+
+        $stmt = $this->product->readAll($fromRecordNum, $recordsPerPage);
+        $products = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $totalRows = $this->product->countAll();
+        $totalPages = ceil($totalRows / $recordsPerPage);
+
+        return [
+            'products' => $products,
+            'total_pages' => $totalPages,
+            'current_page' => $page,
+        ];
+    }
+}
+
+
+
+
+
+<?php
+
+class Product {
+    private $conn;
+    private $table_name = "products";
+
+    public $id;
+    public $name;
+    public $price;
+    public $created_at;
+
+    public function __construct($db) {
+        $this->conn = $db;
+    }
+
+    // Create product
+    public function create() {
+        $query = "INSERT INTO " . $this->table_name . " (name, price) VALUES (:name, :price)";
+        $stmt = $this->conn->prepare($query);
+
+        $stmt->bindParam(':name', $this->name);
+        $stmt->bindParam(':price', $this->price);
+
+        return $stmt->execute();
+    }
+
+    // Read all products with pagination
+    public function readAll($start, $limit) {
+        $query = "SELECT * FROM " . $this->table_name . " ORDER BY created_at DESC LIMIT :start, :limit";
+        $stmt = $this->conn->prepare($query);
+        
+        $stmt->bindParam(':start', $start, PDO::PARAM_INT);
+        $stmt->bindParam(':limit', $limit, PDO::PARAM_INT);
+        
+        $stmt->execute();
+
+        return $stmt;
+    }
+
+    // Count total records for pagination
+    public function countAll() {
+        $query = "SELECT COUNT(*) as total_rows FROM " . $this->table_name;
+        $stmt = $this->conn->prepare($query);
+        $stmt->execute();
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $row['total_rows'];
+    }
+}
+<?php
+
+class Database {
+    private $host = 'localhost';
+    private $db_name = 'your_database_name';
+    private $username = 'your_username';
+    private $password = 'your_password';
+    public $conn;
+
+    public function getConnection() {
+        $this->conn = null;
+
+        try {
+            $this->conn = new PDO("mysql:host=" . $this->host . ";dbname=" . $this->db_name, $this->username, $this->password);
+            $this->conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        } catch (PDOException $exception) {
+            echo "Connection error: " . $exception->getMessage();
+        }
+
+        return $this->conn;
+    }
+}
+/project-root
+    /controllers
+        ProductController.php
+    /models
+        Product.php
+    /config
+        database.php
+    /views
+        index.php
+    /public
+        index.php

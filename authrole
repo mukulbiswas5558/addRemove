@@ -1,0 +1,395 @@
+<?php
+
+function Using($name, $var = [])
+{
+    // Adjust path to use the parent directory and locate the components folder
+    $component = __DIR__ . "/../components/$name.php";
+
+    if (file_exists($component)) {
+        extract($var); // Makes $title and other variables available in the component
+        include $component;
+    } 
+}
+<?php
+
+
+
+// Middleware function to check role access
+function checkRole($requiredRoles = []) {
+    // If no role is set in the session, redirect to login
+    if (!isset($_SESSION['role'])) {
+        header("Location: ". base_url ('user'));
+        exit();
+    }
+
+    // If roles are specified, ensure the user's role is allowed
+    if (!in_array($_SESSION['role'], $requiredRoles)) {
+        
+        header("Location: ". base_url('user')); // Redirect to unauthorized page
+        exit();
+    }
+
+    return true;
+}
+<?php
+
+
+// Middleware function to check if the user is logged in and redirect based on role
+function checkAndRedirectDashboard() {
+    // Check if the user is logged in
+    if (!isset($_SESSION['user_id'])) {
+        header("Location: ". base_url("user/index.php")); // Redirect to login page if not logged in
+        exit();
+    }
+
+    // Redirect to the appropriate dashboard based on role
+    if (isset($_SESSION['role'])) {
+        switch ($_SESSION['role']) {
+            case 'admin':
+
+               header("Location: ". base_url("user/admin"));
+                break;
+            case 'manager':
+
+                header("Location: ". base_url("user/manager"));
+                break;
+            case 'customer':
+
+                header("Location: ". base_url("user/customer"));
+                break;
+            default:
+
+                header("Location:  ". base_url());
+                break;
+        }
+        exit();
+    }
+}
+<?php
+
+
+
+// Middleware function to check role access
+function checkRole($requiredRoles = []) {
+    // If no role is set in the session, redirect to login
+    if (!isset($_SESSION['role'])) {
+        header("Location: ". base_url ('user'));
+        exit();
+    }
+
+    // If roles are specified, ensure the user's role is allowed
+    if (!in_array($_SESSION['role'], $requiredRoles)) {
+        
+        header("Location: ". base_url('user')); // Redirect to unauthorized page
+        exit();
+    }
+
+    return true;
+}
+<?php
+include "../../autoload.php";
+
+checkRole(requiredRoles: ['admin']);
+
+$title = "Avenger";
+// echo $title;
+// die();
+Using("header", ["title" => $title]);
+Using("card", ["title" => $title, "content" => $title]);
+
+?>
+<?php
+include "../../autoload.php";
+
+checkRole(['customer']);
+
+echo "Welcome to the customer Dashboard!";
+<?php
+error_reporting(E_ALL);
+ini_set('display_errors', '1');
+ob_start();
+date_default_timezone_set("Asia/Calcutta"); 
+
+session_start();
+
+header('Access-Control-Allow-Origin: *');
+include_once __DIR__ . '/tools/pager.php';
+include_once __DIR__ . '/tools/auth.php';
+include_once __DIR__ . '/tools/checkRole.php';
+include_once __DIR__ . '/tools/db.php';
+include_once __DIR__ . '/tools/sanitizer.php';
+define('BASE_URL', 'http://localhost/page_maker-main/avenger/'); // Adjust the URL to match your project base path
+
+function base_url($path = '') {
+        return rtrim(BASE_URL, '/') . '/' . ltrim($path, '/');
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Page Maker - Admin</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+        .component-wrapper {
+            display: flex;
+            align-items: flex-start;
+            gap: 20px;
+            overflow-x: auto;
+            border: 1px dashed #ccc; /* Added border for visibility */
+            padding: 10px;
+        }
+        .component {
+            width: 300px;
+            min-width: 300px;
+            cursor: move; /* Change cursor to indicate draggable */
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+        .draggable {
+            opacity: 0.5; /* Make it slightly transparent when dragging */
+        }
+        .dropzone {
+            border: 2px dashed #007bff;
+            padding: 10px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container mt-5">
+    <h1 class="text-center mb-4">Create New Page</h1>
+    <form method="POST" action="save_page.php" enctype="multipart/form-data">
+        <div class="mb-3">
+            <input type="text" name="title" class="form-control" placeholder="Page Title" required>
+        </div>
+
+        <div id="components" class="component-wrapper mb-3"></div>
+
+        <div id="available-components" class="mb-3">
+            <h5>Available Components</h5>
+            <div class="component card p-3 mb-3 border" draggable="true" data-type="accordion">
+                <h5>Accordion</h5>
+            </div>
+            <div class="component card p-3 mb-3 border" draggable="true" data-type="card">
+                <h5>Card</h5>
+            </div>
+            <div class="component card p-3 mb-3 border" draggable="true" data-type="form">
+                <h5>Form</h5>
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-success mt-3">Create Page</button>
+    </form>
+</div>
+
+<script>
+    let componentIndex = 0;
+
+    // Handle drag start
+    $(document).on('dragstart', '.component', function (e) {
+        $(this).addClass('draggable');
+        e.originalEvent.dataTransfer.setData('text/plain', $(this).data('type'));
+    });
+
+    // Handle drag end
+    $(document).on('dragend', '.component', function () {
+        $(this).removeClass('draggable');
+    });
+
+    // Allow dropping on the components wrapper
+    $('#components').on('dragover', function (e) {
+        e.preventDefault(); // Prevent default to allow drop
+    });
+
+    // Handle drop event
+    $('#components').on('drop', function (e) {
+        e.preventDefault();
+        const type = e.originalEvent.dataTransfer.getData('text/plain');
+        $(this).append(getComponentHtml(componentIndex++, type));
+    });
+
+    // Generate the component HTML template dynamically
+    function getComponentHtml(index, type) {
+        return `
+            <div class="component card p-3 mb-3 border" data-index="${index}" draggable="true">
+                <h5>${type.charAt(0).toUpperCase() + type.slice(1)} #${index + 1}</h5>
+                <select name="components[${index}][type]" class="form-select mb-2 component-type">
+                    <option value="accordion">Accordion</option>
+                    <option value="card">Card</option>
+                    <option value="form">Form</option>
+                </select>
+
+                <div class="form-group mb-2">
+                    <input type="text" name="components[${index}][heading]" class="form-control" placeholder="Heading">
+                </div>
+
+                <textarea name="components[${index}][content]" class="form-control mb-2" placeholder="Content (Optional)"></textarea>
+
+                <div class="nested-components dropzone"></div> <!-- Added dropzone class -->
+
+                <button type="button" class="btn btn-danger remove-component">Remove</button>
+
+                <div class="dynamic-fields mt-3"></div>
+            </div>
+        `;
+    }
+
+    // Remove a component or nested component
+    $(document).on('click', '.remove-component', function () {
+        $(this).closest('.component').remove();
+    });
+
+    // Add form fields when 'Form' is selected
+    $(document).on('change', '.component-type', function () {
+        const component = $(this).closest('.component');
+        const type = $(this).val();
+
+        if (type === 'form') {
+            component.find('.dynamic-fields').html(getFormFieldsHtml());
+        } else {
+            component.find('.dynamic-fields').empty();
+        }
+    });
+
+    // Generate dynamic form fields HTML template
+    function getFormFieldsHtml() {
+        return `
+            <div class="form-group mb-2 field-group">
+                <input type="text" name="form_fields[][name]" class="form-control mb-2" placeholder="Field Name">
+                <select name="form_fields[][type]" class="form-select">
+                    <option value="text">Text</option>
+                    <option value="date">Date</option>
+                    <option value="file">Image</option>
+                </select>
+                <button type="button" class="btn btn-danger mt-2 remove-field">Remove Field</button>
+            </div>
+            <button type="button" class="btn btn-info mt-2 add-field">Add More Fields</button>
+        `;
+    }
+
+    // Add more fields within the form
+    $(document).on('click', '.add-field', function () {
+        $(this).before(`
+            <div class="form-group mb-2 field-group">
+                <input type="text" name="form_fields[][name]" class="form-control mb-2" placeholder="Field Name">
+                <select name="form_fields[][type]" class="form-select">
+                    <option value="text">Text</option>
+                    <option value="date">Date</option>
+                    <option value="file">Image</option>
+                </select>
+                <button type="button" class="btn btn-danger mt-2 remove-field">Remove Field</button>
+            </div>
+        `);
+    });
+
+    // Remove a form field
+    $(document).on('click', '.remove-field', function () {
+        $(this).closest('.field-group').remove();
+    });
+</script>
+
+</body>
+</html>
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= $var["title"] ?></title>
+</head>
+
+<body><?php
+include "../autoload.php";
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login Form</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        .login-container {
+            margin-top: 100px;
+        }
+        .card {
+            border-radius: 15px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body>
+
+<div class="container login-container">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header text-center">
+                    <h4>Login</h4>
+                </div>
+                <div class="card-body">
+                    <form action="http://localhost/page_maker-main/avenger/user/do" method="post">
+                        <div class="form-group">
+                            <label for="username">Username</label>
+                            <input type="text" class="form-control" id="username" name="username" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="password">Password</label>
+                            <input type="password" class="form-control" id="password" name="password" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-block">Login</button>
+                    </form>
+                    <?php if (isset($error)): ?>
+                        <div class="alert alert-danger mt-3"><?php echo $error; ?></div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+</body>
+</html><?php
+
+
+include "../autoload.php";
+
+
+$error = '';
+
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $username = sanitize($_POST['username']);
+    $password = sanitize($_POST['password']);
+
+    // Fetch user details from the database
+    $user = row("SELECT * FROM admin WHERE username = ?", [$username]); // Adjust the table name
+
+    if ($user) {
+        // Verify password
+        if (password_verify($password, $user['password'])) {
+            // Password is correct, log in the user
+            $_SESSION['user_id'] = $user['id']; // Store user ID in session
+            $_SESSION['role'] = $user['role']; // Store user ID in session
+            checkAndRedirectDashboard();
+            exit();
+        } else {
+            $error = 'Invalid username or password';
+            echo "pwd".$error;
+        }
+    } else {
+        $error = 'Invalid username or password';
+        echo "user not found".$error;
+    }
+}

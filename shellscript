@@ -1,0 +1,51 @@
+# Define folder paths
+$folders = @(
+    "gateway_service/app/routers",
+    "gateway_service/app/services",
+    "user_service/app/routers",
+    "user_service/app/services",
+    "post_service/app/routers",
+    "post_service/app/services",
+    "item_service/app/routers",
+    "item_service/app/services"
+)
+
+# Define files to create
+$files = @(
+    "gateway_service/app/__init__.py",
+    "gateway_service/app/main.py",
+    "gateway_service/app/routers/__init__.py",
+    "gateway_service/app/routers/api_gateway.py",
+    "gateway_service/app/services/__init__.py",
+    "gateway_service/app/services/user_client.py",
+    "gateway_service/app/services/post_client.py",
+    "gateway_service/app/services/item_client.py",
+    "user_service/app/__init__.py",
+    "user_service/app/main.py",
+    "user_service/app/models.py",
+    "user_service/app/database.py",
+    "user_service/app/routers/users.py",
+    "user_service/app/services/user_service.py",
+    "post_service/app/__init__.py",
+    "post_service/app/main.py",
+    "post_service/app/models.py",
+    "post_service/app/database.py",
+    "post_service/app/routers/posts.py",
+    "post_service/app/services/post_service.py",
+    "item_service/app/__init__.py",
+    "item_service/app/main.py",
+    "item_service/app/models.py",
+    "item_service/app/database.py",
+    "item_service/app/routers/items.py",
+    "item_service/app/services/item_service.py"
+)
+
+# Create folders
+foreach ($folder in $folders) {
+    New-Item -ItemType Directory -Path $folder -Force
+}
+
+# Create files
+foreach ($file in $files) {
+    New-Item -ItemType File -Path $file -Force
+}

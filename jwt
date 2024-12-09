@@ -1,0 +1,209 @@
+<?php
+include_once __DIR__ . '/../../vendor/autoload.php';
+include_once __DIR__ . '/../models/UsersModel.php';
+
+use Firebase\JWT\JWT;
+use Firebase\JWT\Key;
+
+class JWTParser {
+    private $config;
+
+    public function __construct() {
+        // Load credentials from the external configuration file
+        $this->config = include(__DIR__ . '/../components/Credentials.php');
+    }
+
+    /**
+     * Generate Access Token
+     */
+    public function generateAccessToken($userId) {
+        return $this->generateJWT($userId, 'access');
+    }
+
+    /**
+     * Generate Refresh Token
+     */
+    public function generateRefreshToken($userId) {
+        return $this->generateJWT($userId, 'refresh');
+    }
+
+    /**
+     * Validate Access Token
+     */
+    public function validateAccessToken($jwt) {
+        return $this->validateToken($jwt, 'access');
+    }
+
+    /**
+     * Validate Refresh Token
+     */
+    public function validateRefreshToken($jwt) {
+        // Decode and validate JWT
+        $decoded = $this->validateToken($jwt, 'refresh');
+        
+        if ($decoded["responseCode"] === "200") {
+            // Check if the refresh token exists in the database and is valid
+            $userId = $decoded["userId"];
+            if ($this->isRefreshTokenValid($userId, $jwt)) {
+                return [
+                    "responseCode" => "200",
+                    "userId" => $userId,
+                    "responseMessage" => "Refresh token validated successfully"
+                ];
+            } else {
+                return [
+                    "responseCode" => "401",
+                    "responseMessage" => "Refresh token is invalid or expired"
+                ];
+            }
+        } else {
+            return $decoded; // Return the error response from validateToken
+        }
+    }
+
+    /**
+     * Generate JWT (Access or Refresh)
+     */
+    private function generateJWT($userId, $generateType = 'access') {
+        $date = new DateTimeImmutable();
+
+        $secretKey = $generateType === 'access' 
+            ? $this->config["JWT_CREDENTIALS"]["ACCESS_SECRET_KEY"] 
+            : $this->config["JWT_CREDENTIALS"]["REFRESH_SECRET_KEY"];
+
+        $expirationTime = $generateType === 'access' 
+            ? $this->config["JWT_CREDENTIALS"]["ACCESS_SECRET_EXPIRY_TIME"] 
+            : $this->config["JWT_CREDENTIALS"]["REFRESH_SECRET_EXPIRY_TIME"];
+
+        $payload = [
+            'iat' => $date->getTimestamp(),
+            'iss' => $this->config["JWT_CREDENTIALS"]["ISS"],
+            'nbf' => $date->getTimestamp(),
+            'exp' => $date->getTimestamp() + $expirationTime,
+            'userId' => $userId,
+            'type' => $generateType
+        ];
+
+        try {
+            $jwt = JWT::encode($payload, $secretKey, 'HS256');
+
+            if ($generateType === 'refresh') {
+                $this->storeRefreshToken($userId, $jwt, $date->getTimestamp() + $expirationTime);
+            }
+
+            return [
+                "responseCode" => "200",
+                "jwt" => $jwt,
+                "responseMessage" => ucfirst($generateType) . " token generated successfully"
+            ];
+        } catch (Exception $e) {
+            return [
+                "responseCode" => "500",
+                "responseMessage" => $e->getMessage()
+            ];
+        }
+    }
+
+    /**
+     * Validate Token (Access or Refresh)
+     */
+    private function validateToken($jwt, $type) {
+        $secretKey = $type === 'access'
+            ? $this->config["JWT_CREDENTIALS"]["ACCESS_SECRET_KEY"]
+            : $this->config["JWT_CREDENTIALS"]["REFRESH_SECRET_KEY"];
+
+        try {
+            $decoded = JWT::decode($jwt, new Key($secretKey, 'HS256'));
+            return [
+                "responseCode" => "200",
+                "userId" => $decoded->userId,
+                "responseMessage" => ucfirst($type) . " token validated successfully"
+            ];
+        } catch (Exception $e) {
+            return [
+                "responseCode" => "401",
+                "responseMessage" => $e->getMessage()
+            ];
+        }
+    }
+
+    /**
+     * Store Refresh Token in Database
+     */
+    private function storeRefreshToken($userId, $refreshToken, $expiresAt) {
+        
+        $usersModel = new UsersModel();
+        $storeRefreshTokenData = $usersModel->storeRefreshToken($userId, $refreshToken, $expiresAt);
+       return $storeRefreshTokenData;
+    }
+
+    /**
+     * Check if Refresh Token Exists and is Valid
+     */
+    private function isRefreshTokenValid($userId, $refreshToken) {
+        $usersModel = new UsersModel();
+        $validateRefreshTokenData = $usersModel->validateRefreshToken($userId, $refreshToken);
+        return $validateRefreshTokenData;
+        
+    }
+}
+?>
+class RefreshTokenController {
+
+    public function getAccessToken($refreshToken) {
+        $jWTParser = new JWTParser();
+        $usersModel = new UsersModel();
+
+        // Validate the refresh token
+        $responseRefreshToken = $jWTParser->validateRefreshToken($refreshToken);
+
+        if ($responseRefreshToken && $responseRefreshToken["responseCode"] === "200") {
+            $userId = $responseRefreshToken["userId"];
+
+            // Check if the user exists
+            $checkUsersExist = $usersModel->checkUsersExistByUserId($userId);
+            if (!$checkUsersExist) {
+                $responseData = [
+                    "responseCode" => "404",
+                    "responseMessage" => "User does not exist"
+                ];
+            } else if ($checkUsersExist->isBlock == 1) {
+                // Check if the user is blocked by the admin
+                $responseData = [
+                    "responseCode" => "403",
+                    "responseMessage" => "User is blocked by admin"
+                ];
+            } else {
+                // Generate a new access token
+                $responseAccessToken = $jWTParser->generateAccessToken($userId);
+
+                if ($responseAccessToken["responseCode"] === "200") {
+                    $jwt = $responseAccessToken["jwt"];
+
+                    $responseData = [
+                        "responseCode" => "200",
+                        "jwt" => $jwt,
+                        "responseMessage" => "Successfully generated new access token."
+                    ];
+                } else {
+                    // Handle access token generation failure
+                    $responseData = [
+                        "responseCode" => "500",
+                        "responseMessage" => "Failed to generate access token."
+                    ];
+                }
+            }
+        } else {
+            // Refresh token is invalid or expired
+            $responseData = [
+                "responseCode" => $responseRefreshToken["responseCode"],
+                "responseMessage" => $responseRefreshToken["responseMessage"]
+            ];
+        }
+
+        // Return the response in JSON format
+        echo json_encode($responseData, JSON_PRETTY_PRINT);
+        die();
+    }
+
+}
